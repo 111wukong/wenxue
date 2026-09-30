@@ -797,8 +797,25 @@
 }
 .wrow .w-top { display: flex; align-items: center; gap: 9px; margin-bottom: 5px; }
 .wrow .w-name { color: var(--tx-0); font-weight: 600; }
-.wrow .w-bar { flex: 1; height: 5px; border-radius: 99px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.wrow .w-fill { height: 100%; background: linear-gradient(90deg, var(--bad), var(--warn)); }
+/* ★ 这两个都是 span。虽然父级是 flex 会被「块化」，
+ *   但显式写 display 更稳 —— 换个父级（比如以后加个 inline-flex 包装）
+ *   高度和宽度就会静默失效，进度条看起来是空的，而没有任何报错。 */
+.wrow .w-bar {
+  display: block;
+  flex: 1;
+  min-width: 40px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.wrow .w-fill {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--bad), var(--warn));
+}
 .wrow .w-num { font-family: var(--mono); font-size: 11px; color: var(--tx-2); }
 .mrow .m-q { color: var(--tx-1); }
 .mrow .m-a { font-family: var(--mono); font-size: 11.5px; color: var(--bad); margin-top: 4px; }

@@ -147,6 +147,9 @@ export function defaultRoute(body) {
 
   if (/课堂调度器/.test(sys)) return textDeltas('{"next":"END"}');
   if (/考研数学出题老师/.test(sys)) return textDeltas(JSON.stringify(GOOD_QUESTIONS));
+  /* 讲评老师：不补这条分支的话，练习页答错后那段讲评会走到「（默认）」兜底，
+     看着像功能坏了，其实是 mock 没覆盖到。 */
+  if (/讲评老师/.test(sys)) return textDeltas('你大概是漏了前提条件那一步。先回去看定理的第二条，然后重新走一遍。这一步现在清楚了吗？');
 
   if (tools.length && !hasToolResult) {
     return toolDeltas([{ name: 'look_up', args: { point: '罗尔定理' } }], '', 3);

@@ -6,7 +6,9 @@
   "description": "问学 —— 基于多智能体集群的 AI 学习应用（零依赖）",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/run-all.mjs"
+    "test": "node tests/run-all.mjs",
+    "test:browser": "node tests/browser.mjs",
+    "smoke": "node scripts/smoke-real.mjs"
   },
   "engines": {
     "node": ">=20"

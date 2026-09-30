@@ -137,12 +137,14 @@
 
 .bg-axis { stroke: rgba(255, 255, 255, 0.24); stroke-width: 1; }
 .bg-gridline { stroke: rgba(255, 255, 255, 0.055); stroke-width: 1; }
-.bg-tick { fill: var(--tx-2); font-size: 9px; font-family: var(--mono); }
-.bg-label { fill: var(--tx-2); font-size: 9.5px; font-family: var(--mono); }
+/* ★ 字号要按 viewBox 折算：SVG 是 460 宽，渲染出来只有三百多像素，
+ *   9px 的刻度到屏幕上只剩 7px 左右，读数很吃力。 */
+.bg-tick { fill: var(--tx-2); font-size: 11px; font-family: var(--mono); }
+.bg-label { fill: var(--tx-2); font-size: 11.5px; font-family: var(--mono); }
 
 .b-graph-line {
   stroke: var(--ac-2);
-  stroke-width: 2;
+  stroke-width: 2.5;
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;

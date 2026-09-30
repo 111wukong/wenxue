@@ -39,6 +39,44 @@ jobs:
           npm test 2>&1 | tee /tmp/test.log
           total=$(grep -oE '[0-9]+ 通过' /tmp/test.log | grep -oE '[0-9]+' | paste -sd+ - | bc)
           echo "总断言数：$total"
-          if [ "$total" -lt 400 ]; then
+          if [ "$total" -lt 500 ]; then
             echo "★ 断言数掉到 $total 了，检查是不是有套件被跳过"; exit 1
           fi
+
+  # 浏览器套件单开一个 job：它依赖 Chrome，跑挂了不该把纯逻辑的绿灯带红。
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ★ 中文字体必须装。不装的话截图里全是豆腐块 ——
+      #   而截图看起来「有东西」，很容易被当成渲染正常。
+      - name: 装中文字体
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+
+      - name: 确认有可用的 Chrome
+        run: |
+          for p in /usr/bin/google-chrome /usr/bin/chromium-browser /usr/bin/chromium; do
+            [ -x "$p" ] && { echo "内核：$p"; exit 0; }
+          done
+          echo "★ runner 上没有 Chrome，浏览器套件会跳过 —— 这条不该发生"; exit 1
+
+      - name: 真浏览器套件
+        run: npm run test:browser
+
+      # ★ 截图是产物，也是证据。跑完必须真的有一批新图，
+      #   否则说明套件其实跳过了（跳过是退出码 0）。
+      - name: 确认截图真的生成了
+        run: |
+          n=$(ls docs/screenshots/*.png 2>/dev/null | wc -l | tr -d ' ')
+          echo "截图数：$n"
+          [ "$n" -ge 5 ] || { echo "★ 截图不足 5 张，浏览器套件多半被跳过了"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: docs/screenshots/*.png

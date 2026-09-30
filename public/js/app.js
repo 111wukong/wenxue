@@ -70,6 +70,7 @@ const state = {
   mode: 'class',
   view: 'class',
   session: null,
+  lastMoves: null,        // 上一节课的教学动作统计（收尾后仍要能看）
   running: false,
   boardPage: null,        // ★ 浏览位置不落盘：刷新后回最新一组更合理
   generated: [],          // AI 生成的题
@@ -156,7 +157,10 @@ function renderProfile() {
   ];
 
   let gauge = '';
-  const moves = (state.session && state.session.moves) || null;
+  /* ★ 课程结束后 state.session 会被置空，但「引导占比」恰恰是这时候最该看的
+   *   —— 刚上完一节，回头看看老师到底是在引导还是在念答案。
+   *   所以收尾时把 moves 存一份下来，别让它跟着会话一起消失。 */
+  const moves = (state.session && state.session.moves) || state.lastMoves || null;
   const ratio = moves ? guidanceRatio(moves) : null;
   if (moves) {
     const f = moves.focus || 0, p = moves.probing || 0, t = moves.telling || 0;
@@ -350,7 +354,12 @@ function appendToolChip(role, name, phase, ok, error) {
     scrollDown(true);
     return;
   }
-  const el = $(`[data-tool="${role}:${name}"]`, $('#stream'));
+  /* ★ 找第一个**还没完成**的同名胶囊。
+   *   用 $() 拿第一个的话，同一个工具在一轮里被调两次时，
+   *   两次 done 都会打在第一个上，第二个永远转圈 ——
+   *   看起来像「卡住了」，其实是配对错了。 */
+  const el = $$(`[data-tool="${role}:${name}"]`, $('#stream'))
+    .find((e) => !e.classList.contains('done'));
   if (!el) return;
   el.classList.add('done');
   el.innerHTML = ok
@@ -432,6 +441,12 @@ const hooks = {
     switch (ev.type) {
       case 'round':
         appendRound(ev.round, ev.phase);
+        /* ★ 每一轮都要开一个**新的**老师气泡。
+         *   不置空的话，ensureTeacherBubble 会把上一轮那个复用掉 ——
+         *   于是第二轮的文字覆盖掉第一轮的，四轮课上完只看得到最后一句。
+         *   而 session.turns 里四条都在，所以数据流测试全绿，
+         *   只有真浏览器看得出来「屏幕上少了几段」。 */
+        state.teacherBubble = null;
         break;
       case 'speaking': {
         const prev = $('.avatar.speaking');
@@ -456,10 +471,19 @@ const hooks = {
       case 'patch': {
         const el = state.teacherBubble;
         if (el) {
-          el.querySelector('.b-text').innerHTML = renderInline(ev.text);
-          el.querySelector('.bubble').classList.remove('streaming');
-          const slot = el.querySelector('.move-slot');
-          if (ev.move) slot.innerHTML = `<span class="move-tag ${ev.move}">${ev.move}</span>`;
+          const text = String(ev.text || '');
+          if (!text.trim()) {
+            /* 老师这一轮**只调了工具、没说话**（模型把最后的收尾调用也
+             * 用来发工具调用了）。留一个空气泡会让人以为界面坏了 ——
+             * 工具胶囊和黑板已经把发生过的事说清楚了，直接收掉。 */
+            el.remove();
+            state.teacherBubble = null;
+          } else {
+            el.querySelector('.b-text').innerHTML = renderInline(text);
+            el.querySelector('.bubble').classList.remove('streaming');
+            const slot = el.querySelector('.move-slot');
+            if (ev.move) slot.innerHTML = `<span class="move-tag ${ev.move}">${ev.move}</span>`;
+          }
         }
         renderProfile();
         break;
@@ -473,13 +497,15 @@ const hooks = {
       case 'tool':
         appendToolChip(ev.role, ev.name, ev.phase, ev.ok, ev.error);
         break;
-      case 'board': {
-        if (state.session) {
-          state.session.board.push(ev.item);
-          renderBoard(state.session);
-        }
+      case 'board':
+        /* ★ 只重画，**不要**在这里 push。
+         *   session.board 是模型，classroom 那边已经 push 过了；
+         *   UI 再 push 一次的话同一块内容会在黑板上出现两遍。
+         *   而因为两份内容一模一样，肉眼很容易当成「老师讲了两遍」，
+         *   不会去怀疑是数据重复 —— 真踩过，而且数据流测试全绿
+         *   （它们不含 app.js 的事件处理器）。 */
+        renderBoard(state.session);
         break;
-      }
       case 'ask':
         renderAsk(ev.spec);
         break;
@@ -492,6 +518,8 @@ const hooks = {
         break;
       case 'done':
         state.running = false;
+        // 留一份统计，让「引导占比」在收尾之后仍然看得见
+        state.lastMoves = (state.session && state.session.moves) || state.lastMoves || null;
         state.session = null;
         state.teacherBubble = null;
         $('#start-btn').disabled = false;
@@ -697,11 +725,13 @@ function axisSvg(item) {
   const { sx, sy } = proj(item);
   const out = [];
 
-  // 网格 + 刻度：挑一个「整」的步长，别出现 0.3333 这种刻度
+  /* 网格 + 刻度：挑一个「整」的步长，别出现 0.3333 这种刻度。
+   * 分 4 段而不是 6 段 —— 黑板那一栏只有四百来像素宽，
+   * 6 段会把刻度标签挤成一团，反而看不清读数。 */
   const xspan = item.xmax - item.xmin;
   const yspan = item.ymax - item.ymin;
   const stepOf = (span) => {
-    const raw = span / 6;
+    const raw = span / 4;
     const mag = Math.pow(10, Math.floor(Math.log10(raw)));
     const n = raw / mag;
     const s = n >= 5 ? 5 : n >= 2 ? 2 : 1;

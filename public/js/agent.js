@@ -211,11 +211,38 @@ function pickCheck(seed) {
   return COMPREHENSION_CHECKS[i];
 }
 
-/** 把结尾那个问句换成另一个。没有问句就追加。 */
+/**
+ * 找出「该被替换掉的那一段」。
+ *
+ * ★ 比 findLastQuestion 往回走得**更远**：一直退到真正的句末
+ *   （。！？；或换行），把引出语一起包进来。
+ *
+ *   真踩过：只换问句本身的话，
+ *     「好，那我们直接算一下：lim(x→0) sinx/x 等于多少？」
+ *   会变成
+ *     「好，那我们直接算一下：到这里清楚了吗？说不清也没关系……」
+ *   —— 前半句「那我们就直接算一下」是引出算题的，现在跟理解确认拼在一起，
+ *   读起来自相矛盾。而 findLastQuestion 之所以在 `：` 处断开是对的
+ *   （提取问题时要那个精度），替换时要的却是**整句**。
+ */
+export function findReplaceSpan(text) {
+  const s = String(text || '');
+  const { q, end } = findLastQuestion(s);
+  if (!q || end < 0) return { text: '', start: -1, end: -1 };
+  let start = end;
+  /* ★ 回退边界里**不能包含问号**：end 正好落在问号后面，
+   *   把问号也算边界的话循环第一步就停住，span 永远是空的 ——
+   *   于是「替换」静默退化成「追加」，界面上变成
+   *   「好，那我们直接算一下：lim…等于多少？」+ 理解确认，两句并存。 */
+  while (start > 0 && !/[。！!\n；;]/.test(s[start - 1])) start--;
+  return { text: s.slice(start, end).trim(), start, end };
+}
+
+/** 把结尾那个问句（连同引出它的那句话）换成另一个。没有问句就追加。 */
 export function replaceTrailingQuestion(text, newQ) {
   const s = String(text || '');
-  const { q, start, end } = findLastQuestion(s);
-  if (!q) return `${s.trim()}\n\n${newQ}`.trim();
+  const { text: span, start, end } = findReplaceSpan(s);
+  if (!span) return `${s.trim()}\n\n${newQ}`.trim();
   return (s.slice(0, start) + newQ + s.slice(end)).trim();
 }
 

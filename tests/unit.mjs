@@ -27,6 +27,7 @@ import { normalizeAnswer, parseNumeric, answerIssue, judge, sanitizeGenerated,
   extractJson, prettyAnswer } from '../public/js/judge.js';
 import { classifyIntent, nextPhase, enforcePhase, isComputeQuestion, parseMove,
   guidanceRatio, blankMoves, canSpeak, compact, lastQuestion, findLastQuestion,
+  findReplaceSpan, replaceTrailingQuestion,
   COMPREHENSION_CHECKS, AGENTS, STUDENT_KEYS } from '../public/js/agent.js';
 import { renderLatex, renderInline, escapeHtml } from '../public/js/latex.js';
 import * as Store from '../public/js/store.js';
@@ -338,6 +339,22 @@ const { ok, eq, near, throws } = R;
   eq('lecture 阶段四条都留下', r4.turns.length, 4);
 
   eq('findLastQuestion 取最后一个问句', lastQuestion('第一问？第二问？'), '第二问？');
+  /* ★ 换问题时要把**引出语**一起换掉。
+   *   只换问句的话会留下「好，那我们直接算一下：」这种引出算题的前半句，
+   *   和换上去的理解确认拼在一起，读起来自相矛盾。 */
+  {
+    const t = '好，那我们直接算一下：lim(x→0) sinx/x 等于多少？';
+    const out = replaceTrailingQuestion(t, '到这里清楚了吗？');
+    eq('★ 引出语跟着一起被换掉', out, '到这里清楚了吗？');
+    ok('★ 换完之后不含算题动作', !/直接算一下|等于多少/.test(out), out);
+    /* ★ 整句都没有句末标点时会**整句换掉**（'那你想，' 是这句话的引出语，
+     *   跟着一起走）。这是刻意的取舍：宁可多丢一个「那你想，」，
+     *   也不要留下「那我们就直接算一下：」这种和替换后的问题自相矛盾的前半句。 */
+    eq('没有句末标点时整句换掉', replaceTrailingQuestion('那你想，去掉它会怎样？', '换个问题？'), '换个问题？');
+    // 前面还有别的句子时，只吃掉最后一句
+    const t2 = '先看第一条。那你说，去掉它会怎样？';
+    eq('只吃掉最后一句，前面的保留', replaceTrailingQuestion(t2, '换个问题？'), '先看第一条。换个问题？');
+  }
   eq('findLastQuestion 在冒号后断开', lastQuestion('我先问你一个：为什么？'), '为什么？');
   eq('没有问号返回空串', lastQuestion('这是一句陈述。'), '');
 
@@ -566,6 +583,22 @@ const { ok, eq, near, throws } = R;
   ok('结束后的 placeholder 说清了要重开一节', Classroom.interjectPlaceholder(s).includes('重开一节'));
 
   /* ---- 挂起 / 唤醒 ---- */
+  /* ---- 挂起 / 唤醒 ---- */
+  /* ★ 顺序断言：事件发出去的时候，session 必须**已经**记下「我在等作答」。
+   *   反过来的话，UI 收到「该你了」时 canInterject() 会算成「可以插话」——
+   *   正在等你答题的时候插话框反而是可用的，老师被两条线同时拉扯。 */
+  {
+    const sa = Classroom.newSession('rolle', 'solo');
+    Classroom.markLive(sa);
+    let sawAwaiting = null;
+    Classroom.askUser(sa, {
+      onEvent: (e) => { if (e.type === 'ask') sawAwaiting = !!sa.awaiting; },
+      onAsk: () => 'x',
+    }, { prompt: 'q' });
+    eq('★ 发「该你了」事件时，会话已经记下自己在等待', sawAwaiting, true);
+    eq('直通模式下不留 awaiting', sa.awaiting, null);
+  }
+
   const s2 = Classroom.newSession('rolle', 'solo');
   Classroom.markLive(s2);
   const events = [];
@@ -581,6 +614,11 @@ const { ok, eq, near, throws } = R;
   eq('唤醒后拿到答案', resolved, '我懂了');
   eq('唤醒后 awaiting 清空', s2.awaiting, null);
   eq('没有 awaiting 时提交返回 false（接不上）', Classroom.submitAnswer(s2, 'x'), false);
+  /* ★ awaiting 会在「已记账、还没拿到 resolve」的那一小段窗口里是占位对象。
+   *   这时调 resolve 会 TypeError，所以提交必须要求它是个函数。 */
+  s2.awaiting = { prompt: 'x', resolve: null };
+  eq('★ 占位窗口里提交要安全返回 false（不能炸）', Classroom.submitAnswer(s2, 'x'), false);
+  s2.awaiting = null;
 
   const p2 = Classroom.askUser(s2, {}, { prompt: '再来' });
   eq('跳过返回 true', Classroom.skipAnswer(s2), true);
@@ -713,6 +751,17 @@ const { ok, eq, near, throws } = R;
   /* ★ 中文输入法组合期不能提交 */
   ok('★ 输入框回车提交前检查了 isComposing（中文输入法选字时不误提交）',
     (appSrc.match(/isComposing/g) || []).length >= 2);
+  /* ★ 每轮必须开新的老师气泡。不置空的话气泡会被复用，
+   *   第二轮的文字覆盖第一轮的 —— 四轮课上完只看得到最后一句，
+   *   而 session.turns 里四条都在，数据流测试全绿。 */
+  ok('★ 每一轮都重置老师气泡（否则多轮之后前面几轮全被覆盖）',
+    /case 'round':[\s\S]{0,400}?state\.teacherBubble = null/.test(appSrc));
+  /* ★ UI 不能改数据模型：board 事件只重画，不再 push */
+  ok('★ board 事件只重画、不重复落账',
+    /case 'board':[\s\S]{0,300}?renderBoard\(state\.session\)/.test(appSrc)
+    && !/case 'board':[\s\S]{0,200}?board\.push/.test(appSrc));
+  /* ★ 收尾后引导占比要留着 */
+  ok('★ 课程结束后引导占比仍然可见（收尾时留了一份统计）', /state\.lastMoves/.test(appSrc));
   /* ★ 一键按钮两个都要有 —— 少一个这条链就断了 */
   ok('★ 答题卡同时提供「还是没懂」和「懂了，继续」',
     html.includes('id="ask-slot"') && appSrc.includes('还是没懂') && appSrc.includes('懂了，继续'));

@@ -233,6 +233,20 @@ try {
      8. 讲评失败要走降级，不要弹错误
      ============================================================ */
   {
+    /* 先走通成功路径 —— 只测降级的话，「能讲评」这件事本身没人看着 */
+    mock.clearLog();
+    const good = await explainAnswer({ pointId: 'rolle', stem: '题干原文', userAnswer: 'A', standard: 'B', correct: false });
+    eq('★ 讲评成功时返回 ok:true', good.ok, true);
+    ok('讲评正文非空', String(good.text).length > 8, good.text);
+    /* ★ 断言要看**发给上游的请求体**里确实带上了这两样，
+     *   只看返回值的话，把答案漏传了也测不出来 —— 讲评会变成泛泛而谈。 */
+    const lastUser = String((mock.log.at(-1).body.messages.find((m) => m.role === 'user') || {}).content || '');
+    ok('★ 讲评请求里带上了他写的答案', lastUser.includes('A'), lastUser.slice(0, 200));
+    ok('★ 讲评请求里带上了标准答案', lastUser.includes('B'), lastUser.slice(0, 200));
+    ok('★ 讲评请求里带上了题干', lastUser.includes('题干原文'), lastUser.slice(0, 200));
+    ok('★ 讲评提示词里写明了「只讲那一步，不要抄整道题」',
+      /不要把整道题的完整解法抄一遍/.test(String((mock.log.at(-1).body.messages[0] || {}).content || '')));
+
     mock.setMode('billing');
     const out = await explainAnswer({
       pointId: 'rolle', stem: '题干', userAnswer: 'A', standard: 'B', correct: false,

@@ -139,30 +139,47 @@ export function askUser(session, hooks, spec) {
    *   写在 Promise executor 里面的话，onAsk 直通会提前 return，
    *   UI 永远收不到「该你了」事件（真踩过：直通路径测试全绿，
    *   只有真机上 UI 收不到事件）。 */
+  /* ⚠️ 而且还要在 emit **之前**把「我在等作答」这个事实记下来。
+   *   顺序反了的话：UI 收到事件时 session.awaiting 还是 null，
+   *   canInterject() 会算成「可以插话」—— 于是**正在等你答题的时候，
+   *   插话输入框反而是可用的**，老师会被两条线同时拉扯。
+   *   （resolve 此刻还没有，先占位，Promise executor 里补上。） */
+  session.awaiting = { prompt: payload.prompt, resolve: null };
+
   emit(hooks, { type: 'ask', spec: payload });
   status(hooks, spec.status || '该你了 —— 先答上面这道题');
 
   if (hooks && typeof hooks.onAsk === 'function') {
+    session.awaiting = null;                            // 直通模式没有真的挂起
     return Promise.resolve(hooks.onAsk(payload));       // 测试 / 无人值守直通
   }
   return new Promise((resolve) => {
-    session.awaiting = { prompt: payload.prompt, resolve };
+    session.awaiting.resolve = resolve;
   });
 }
 
-export function submitAnswer(session, text) {
-  if (!session || !session.awaiting) return false;      // 接不上（刷新后残留）
+/* ★ 提交/跳过必须要求 resolve 是个函数。
+ *   awaiting 会在「已经记账、还没拿到 resolve」的那一小段窗口里是占位对象，
+ *   这时调 resolve 会炸。 */
+function takeResolver(session) {
+  if (!session || !session.awaiting) return null;
   const r = session.awaiting.resolve;
+  if (typeof r !== 'function') return null;
   session.awaiting = null;
+  return r;
+}
+
+export function submitAnswer(session, text) {
+  const r = takeResolver(session);
+  if (!r) return false;                                 // 接不上（刷新后残留）
   r(String(text ?? ''));
   return true;
 }
 
 /** 跳过。流程照常继续，但这次没有用户输入 —— 后续提示词里要明确写「他跳过了，别追问」。 */
 export function skipAnswer(session) {
-  if (!session || !session.awaiting) return false;
-  const r = session.awaiting.resolve;
-  session.awaiting = null;
+  const r = takeResolver(session);
+  if (!r) return false;
   session.passed += 1;
   r({ __skipped: true });
   return true;
