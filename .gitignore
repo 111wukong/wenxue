@@ -1,0 +1,8 @@
+# ★ API 密钥绝不进版本库。
+#   这个文件在 .gitignore 里，所以本地放着能用；仓库里只有 .env.example。
+.env
+.env.local
+
+node_modules/
+.DS_Store
+*.log

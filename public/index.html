@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>问学 · 多智能体 AI 课堂</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>问</text></svg>">
+<link rel="stylesheet" href="./css/base.css">
+<link rel="stylesheet" href="./css/components.css">
+<link rel="stylesheet" href="./css/board.css">
+</head>
+<body>
+<div class="bg-mesh" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true"></div>
+
+<div class="app">
+
+  <!-- ============ 左：考点 / 模式 / 档案 ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">问</div>
+      <div class="brand-text">
+        <div class="brand-name">问学</div>
+        <div class="brand-sub">多智能体 AI 课堂</div>
+      </div>
+    </div>
+
+    <div class="side-scroll">
+      <section class="side-block">
+        <h3 class="side-title">上课方式</h3>
+        <div class="modes" id="modes"></div>
+        <button class="btn primary block" id="start-btn">
+          <span class="btn-label">开一节课</span>
+          <span class="btn-sub" id="start-sub"></span>
+        </button>
+        <p class="side-hint" id="mode-hint"></p>
+      </section>
+
+      <section class="side-block">
+        <h3 class="side-title">
+          考点
+          <span class="side-count" id="point-count"></span>
+        </h3>
+        <div class="points" id="points"></div>
+      </section>
+
+      <section class="side-block">
+        <h3 class="side-title">学习档案</h3>
+        <div id="profile"></div>
+      </section>
+
+      <section class="side-block">
+        <h3 class="side-title">
+          角色手里的工具
+          <button class="mini" id="tool-toggle">展开</button>
+        </h3>
+        <div id="tools"></div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ============ 中：课堂 / 练习 / 错题本 ============ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="tabs" id="tabs" role="tablist">
+        <button class="tab on" data-view="class" role="tab">课堂</button>
+        <button class="tab" data-view="practice" role="tab">练习</button>
+        <button class="tab" data-view="book" role="tab">错题本</button>
+      </div>
+      <div class="topbar-right">
+        <span class="health" id="health" title="服务端密钥状态">检测中…</span>
+        <span class="status" id="status">准备中</span>
+      </div>
+    </header>
+
+    <!-- ---- 课堂 ---- -->
+    <section class="view" id="view-class">
+      <div class="stream" id="stream">
+        <div class="empty" id="class-empty">
+          <div class="empty-glyph">问</div>
+          <h2>左边选一个考点，然后开一节课</h2>
+          <p>陈老师会先把考点讲透，三个水平不同的同学会跟着讨论——<b>他们说的每句话都算数</b>，包括说错的那部分。</p>
+          <p class="dim">每一轮结束都会停下来等你答。没听懂就直说「没听懂」，老师会退回去重讲，而不是接着往下推。</p>
+        </div>
+      </div>
+      <div class="composer">
+        <div id="ask-slot"></div>
+        <div class="composer-row">
+          <input id="c-input" type="text" autocomplete="off" placeholder="先选一个考点，开一节课">
+          <button class="btn ghost" id="c-send" disabled>插话</button>
+        </div>
+        <p class="composer-hint" id="c-hint"></p>
+      </div>
+    </section>
+
+    <!-- ---- 练习 ---- -->
+    <section class="view" id="view-practice" hidden>
+      <div class="pane">
+        <div class="pane-head">
+          <h2>AI 出题</h2>
+          <p class="dim">按考点生成练习题，自动判分。判不了分的题会被直接丢掉——宁可少给，不给坏的。</p>
+        </div>
+        <div class="gen-row">
+          <label class="field">
+            <span>考点</span>
+            <select id="gen-point"></select>
+          </label>
+          <label class="field narrow">
+            <span>题数</span>
+            <select id="gen-count">
+              <option>2</option><option selected>3</option><option>4</option><option>5</option>
+            </select>
+          </label>
+          <button class="btn primary" id="gen-btn">生成练习题</button>
+          <button class="btn ghost" id="bank-btn">做本考点的题</button>
+        </div>
+        <div class="gen-note" id="gen-note"></div>
+        <div class="quiz" id="quiz"></div>
+      </div>
+    </section>
+
+    <!-- ---- 错题本 ---- -->
+    <section class="view" id="view-book" hidden>
+      <div class="pane">
+        <div class="pane-head">
+          <h2>错题本</h2>
+          <p class="dim">这些记录会实时喂进老师的提示词——他讲什么，取决于你错在哪。</p>
+        </div>
+        <div class="book-grid">
+          <div>
+            <h3 class="sub">薄弱考点</h3>
+            <div id="weak-list"></div>
+          </div>
+          <div>
+            <h3 class="sub">最近的错题</h3>
+            <div id="mistake-list"></div>
+          </div>
+        </div>
+        <button class="btn ghost danger" id="reset-btn">清空全部记录</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ 右：黑板 ============ -->
+  <aside class="board-panel">
+    <div class="panel-head">
+      <span class="panel-title">
+        <span class="dot"></span>黑板
+      </span>
+      <div class="page-nav" id="page-nav"></div>
+    </div>
+    <!-- ★ 初始 HTML 就带上 data-blocks / data-clear，
+         否则第一次渲染读不到标记，会把已有内容全当成新的重播一遍动画 -->
+    <div class="board" id="board" data-blocks="0" data-clear="-1">
+      <div class="board-empty">
+        <div class="board-empty-glyph">∅</div>
+        <p>老师写上去的东西会出现在这里</p>
+        <p class="dim">曲线可以拖参数；步骤会逐条落下；公式会自动排版</p>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

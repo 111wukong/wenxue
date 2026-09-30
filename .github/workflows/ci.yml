@@ -1,0 +1,44 @@
+# 零依赖项目的好处：CI 里**没有安装步骤**。
+# 没有 npm install、没有缓存、没有 lockfile 漂移 —— 签出代码直接跑。
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 跑之前先确认「零依赖」这条底线还在
+      - name: 零依赖自检
+        run: |
+          if [ -d node_modules ]; then echo "★ 出现 node_modules 了，零依赖被破坏"; exit 1; fi
+          if [ -f package-lock.json ]; then echo "★ 出现 lockfile 了，零依赖被破坏"; exit 1; fi
+
+      # 密钥不能进仓库
+      - name: 密钥自检
+        run: |
+          if [ -f .env ]; then echo "★ .env 被提交进来了，它应该在 .gitignore 里"; exit 1; fi
+          if git grep -nE 'sk-[A-Za-z0-9_-]{20,}' -- . ':!README.md' ':!docs/*' ':!.env.example' ':!tests/*'; then
+            echo "★ 仓库里出现了疑似 API Key"; exit 1
+          fi
+
+      # 一次跑完，顺便数断言 —— 套件被静默跳过（比如某个 import 失败被吞掉）
+      # 是最难发现的一种「假绿」，所以卡一个下限。
+      - name: 全部套件
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/test.log
+          total=$(grep -oE '[0-9]+ 通过' /tmp/test.log | grep -oE '[0-9]+' | paste -sd+ - | bc)
+          echo "总断言数：$total"
+          if [ "$total" -lt 400 ]; then
+            echo "★ 断言数掉到 $total 了，检查是不是有套件被跳过"; exit 1
+          fi

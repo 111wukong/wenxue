@@ -1,0 +1,325 @@
+/* 问学 · 黑板
+ *
+ * ── 黑板是一串动作，不是一张图 ──────────────────────────────────
+ * 只有 draw_graph 的黑板本质是展示区，看两眼就走了。
+ * 所以这里是动作族：graph / steps / latex / page / clear / highlight，
+ * 按序播放，且**整块重画时不能重播已有内容的入场动画** ——
+ * 那看着像在抽搐。记账口径见 app.js 的 renderBoard。
+ */
+
+.board-panel { min-width: 0; }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.panel-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx-1);
+}
+.panel-title .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ac-2);
+  box-shadow: 0 0 9px var(--ac-2);
+}
+
+.page-nav { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.page-nav button {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--tx-1);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.page-nav button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); color: var(--tx-0); }
+.page-nav button:disabled { opacity: 0.35; cursor: not-allowed; }
+.page-nav .pg { font-family: var(--mono); font-size: 11px; color: var(--tx-2); }
+
+.board {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.board-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--tx-2);
+  font-size: 12.5px;
+  padding: 20px;
+}
+.board-empty-glyph {
+  font-size: 34px;
+  opacity: 0.3;
+  margin-bottom: 10px;
+  line-height: 1;
+}
+.board-empty p { margin-bottom: 5px; }
+
+/* ============================================================
+   块
+   ============================================================ */
+.b-item {
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: rgba(0, 0, 0, 0.24);
+  padding: 11px 13px;
+  position: relative;
+  transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+}
+
+.b-title {
+  font-size: 11px;
+  color: var(--tx-2);
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+/* 被 highlight 圈中的块 */
+.b-item.is-lit {
+  border-color: rgba(251, 191, 36, 0.62);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3), 0 0 26px rgba(251, 191, 36, 0.16);
+  background: rgba(251, 191, 36, 0.055);
+}
+.b-item.is-lit::before {
+  content: "圈";
+  position: absolute;
+  top: -8px; right: 9px;
+  font-size: 10px;
+  color: #0d1424;
+  background: var(--warn);
+  border-radius: 99px;
+  padding: 0 7px;
+  font-weight: 700;
+  animation: rise 0.3s ease both;
+}
+.b-lit-why {
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--warn);
+  border-left: 2px solid rgba(251, 191, 36, 0.5);
+  padding-left: 8px;
+}
+
+/* 作者标记 */
+.b-by {
+  position: absolute;
+  bottom: -8px;
+  left: 10px;
+  font-size: 9.5px;
+  color: var(--tx-2);
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 0 6px;
+}
+
+/* ============================================================
+   图
+   ============================================================ */
+.b-graph svg { display: block; width: 100%; height: auto; }
+
+.bg-axis { stroke: rgba(255, 255, 255, 0.24); stroke-width: 1; }
+.bg-gridline { stroke: rgba(255, 255, 255, 0.055); stroke-width: 1; }
+.bg-tick { fill: var(--tx-2); font-size: 9px; font-family: var(--mono); }
+.bg-label { fill: var(--tx-2); font-size: 9.5px; font-family: var(--mono); }
+
+.b-graph-line {
+  stroke: var(--ac-2);
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.45));
+}
+
+/* ★ 描线动画用 pathLength 归一化，别去量路径长度：
+   getTotalLength() 又麻烦又容易在重绘后失效。 */
+.b-item.b-fresh .b-graph-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: bDraw 1.15s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes bDraw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* ============================================================
+   参数滑块
+   ============================================================ */
+.b-params {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.b-param { display: flex; align-items: center; gap: 9px; }
+.b-param .pn {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ac-3);
+  width: 16px;
+  flex: none;
+}
+.b-param input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  outline: none;
+}
+.b-param input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--ac-2), var(--ac));
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+  cursor: grab;
+  border: none;
+}
+.b-param input[type="range"]::-moz-range-thumb {
+  width: 14px; height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ac-2);
+  cursor: grab;
+}
+.b-param .pv {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--tx-1);
+  width: 46px;
+  text-align: right;
+  flex: none;
+}
+.b-params-hint { font-size: 10.5px; color: var(--tx-2); }
+
+/* ============================================================
+   步骤
+   ============================================================ */
+.b-steps { list-style: none; margin: 0; padding: 0; counter-reset: st; }
+.b-steps li {
+  counter-increment: st;
+  position: relative;
+  padding: 5px 0 5px 30px;
+  font-size: 13px;
+  color: var(--tx-0);
+  line-height: 1.62;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.055);
+}
+.b-steps li:last-child { border-bottom: none; }
+.b-steps li::before {
+  content: counter(st);
+  position: absolute;
+  left: 0; top: 6px;
+  width: 19px; height: 19px;
+  display: grid; place-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #08101f;
+  background: linear-gradient(140deg, #fde68a, var(--c-teacher));
+  border-radius: 6px;
+  font-weight: 700;
+}
+.b-item.b-fresh .b-steps li {
+  opacity: 0;
+  animation: stepIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.b-item.b-fresh .b-steps li:nth-child(1) { animation-delay: 0.05s; }
+.b-item.b-fresh .b-steps li:nth-child(2) { animation-delay: 0.17s; }
+.b-item.b-fresh .b-steps li:nth-child(3) { animation-delay: 0.29s; }
+.b-item.b-fresh .b-steps li:nth-child(4) { animation-delay: 0.41s; }
+.b-item.b-fresh .b-steps li:nth-child(5) { animation-delay: 0.53s; }
+.b-item.b-fresh .b-steps li:nth-child(6) { animation-delay: 0.65s; }
+.b-item.b-fresh .b-steps li:nth-child(7) { animation-delay: 0.77s; }
+.b-item.b-fresh .b-steps li:nth-child(8) { animation-delay: 0.89s; }
+@keyframes stepIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   公式
+   ============================================================ */
+.b-latex {
+  text-align: center;
+  padding: 12px 8px;
+  font-size: 17px;
+  color: var(--tx-0);
+  overflow-x: auto;
+  line-height: 1.9;
+}
+.b-latex-cap {
+  text-align: center;
+  font-size: 11px;
+  color: var(--tx-2);
+  margin-top: 6px;
+}
+
+/* LaTeX 子集渲染 */
+.lx { font-style: normal; }
+.lx-txt { font-family: var(--font); font-style: normal; }
+.lx-frac {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: -0.52em;
+  text-align: center;
+  margin: 0 0.18em;
+  font-size: 0.92em;
+  line-height: 1.14;
+}
+.lx-num { border-bottom: 1.2px solid currentColor; padding: 0 0.24em; }
+.lx-den { padding: 0 0.24em; }
+.lx-sqrt { display: inline-flex; align-items: stretch; }
+.lx-radical { padding-right: 0.06em; }
+.lx-rad { border-top: 1.2px solid currentColor; padding: 0 0.16em; }
+sup, sub { font-size: 0.7em; }
+
+/* ============================================================
+   翻页分隔
+   ============================================================ */
+.b-page {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 10.5px;
+  color: var(--tx-2);
+  margin: 4px 0 -4px;
+}
+.b-page .ln { flex: 1; height: 1px; background: var(--line); }
+.b-page .tg {
+  border: 1px dashed var(--line-2);
+  border-radius: 99px;
+  padding: 1px 10px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   减少动态效果
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .b-item.b-fresh .b-graph-line { animation: none; }
+  /* ★ 少下面这句，虚线状态会留在原地，曲线看起来像没画出来 */
+  .b-graph-line { stroke-dasharray: none; stroke-dashoffset: 0; }
+  .b-item.b-fresh .b-steps li { opacity: 1; animation: none; }
+}

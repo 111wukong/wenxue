@@ -1,0 +1,15 @@
+{
+  "name": "wenxue",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "问学 —— 基于多智能体集群的 AI 学习应用（零依赖）",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run-all.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

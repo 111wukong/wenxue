@@ -1,0 +1,160 @@
+/* 问学 · 基础层
+ * 设计令牌 + 重置 + 背景。
+ *
+ * ── 深色是唯一主题 ──────────────────────────────────────────────
+ * 这不是偷懒。课堂场景里，黑板、公式、曲线是主角，
+ * 深色底能让这些内容自己发光；亮色底会把它们压平。
+ * 所以令牌只写一套，不搞双主题 —— 少一套就少一半的对比度 bug。
+ */
+
+:root {
+  /* 底色（从外到内逐层变亮，制造纵深） */
+  --bg-0: #060911;
+  --bg-1: #0a1020;
+  --bg-2: #0f1830;
+
+  /* 面板：半透明 + 毛玻璃 */
+  --panel: rgba(18, 27, 48, 0.72);
+  --panel-2: rgba(24, 35, 60, 0.62);
+  --panel-solid: #111a2e;
+
+  /* 描边：两档，细的那档用来做「玻璃边缘」 */
+  --line: rgba(255, 255, 255, 0.075);
+  --line-2: rgba(255, 255, 255, 0.14);
+
+  /* 文字：三档，全部对深底做过对比度检查 */
+  --tx-0: #eef3ff;
+  --tx-1: #b4c1dd;
+  --tx-2: #78899f;
+
+  /* 强调色 */
+  --ac: #5b8cff;
+  --ac-2: #22d3ee;
+  --ac-3: #a78bfa;
+
+  /* 语义色（注意：涨红跌绿是 A 股习惯，这里不用，只用对错语义） */
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --bad: #fb7185;
+
+  /* 角色色 */
+  --c-teacher: #fbbf24;
+  --c-a: #38bdf8;
+  --c-b: #a78bfa;
+  --c-c: #fb7185;
+
+  /* 圆角与阴影 */
+  --r-1: 8px;
+  --r-2: 12px;
+  --r-3: 18px;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-2: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --sh-glow: 0 0 0 1px rgba(91, 140, 255, 0.35), 0 8px 32px rgba(91, 140, 255, 0.18);
+
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", "Source Han Sans SC", "Noto Sans CJK SC", "WenQuanYi Micro Hei",
+          system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --sp: 16px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--tx-0);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.72;
+  /* ★ 汉字不能加 letter-spacing：中文是等宽方块字，加了会散架。
+     需要「透气」时用 line-height，不用字距。 */
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ============================================================
+   背景：两层，都是纯 CSS，不引图片
+   ============================================================ */
+.bg-mesh {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 620px at 12% -10%, rgba(91, 140, 255, 0.20), transparent 62%),
+    radial-gradient(900px 560px at 92% 8%, rgba(167, 139, 250, 0.16), transparent 60%),
+    radial-gradient(1000px 700px at 60% 108%, rgba(34, 211, 238, 0.11), transparent 62%),
+    linear-gradient(180deg, var(--bg-0), var(--bg-1) 55%, var(--bg-0));
+}
+
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(900px 700px at 50% 30%, #000 30%, transparent 78%);
+  -webkit-mask-image: radial-gradient(900px 700px at 50% 30%, #000 30%, transparent 78%);
+}
+
+/* ============================================================
+   滚动条
+   ============================================================ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); background-clip: content-box; }
+
+/* ============================================================
+   排版元素
+   ============================================================ */
+h1, h2, h3, h4 { margin: 0; font-weight: 650; line-height: 1.4; }
+h2 { font-size: 17px; }
+h3 { font-size: 13px; }
+p { margin: 0 0 8px; }
+p:last-child { margin-bottom: 0; }
+b, strong { font-weight: 650; color: var(--tx-0); }
+
+code, .mono { font-family: var(--mono); font-size: 0.92em; }
+
+::selection { background: rgba(91, 140, 255, 0.34); }
+
+.dim { color: var(--tx-2); }
+.warn-tx { color: var(--warn); }
+.bad-tx { color: var(--bad); }
+.ok-tx { color: var(--ok); }
+
+[hidden] { display: none !important; }
+
+/* ============================================================
+   无障碍：尊重系统的「减少动态效果」
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .bg-mesh { background: linear-gradient(180deg, var(--bg-0), var(--bg-1)); }
+  .bg-grid { display: none; }
+}
