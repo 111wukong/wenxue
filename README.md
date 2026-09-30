@@ -81,7 +81,7 @@ wenxue/
 │       └── app.js             UI 编排
 ├── tests/
 │   ├── lib/harness.mjs        mock OpenAI 兼容上游（SSE + 非流式）
-│   ├── unit.mjs               358 条：纯函数
+│   ├── unit.mjs               361 条：纯函数 + 源码级自检 + 模块图链接
 │   ├── agent.mjs              64 条：agent loop 端到端
 │   └── classroom.mjs          39 条：集群编排端到端
 └── scripts/smoke-real.mjs     真机联通性检查（对真的 DeepSeek 打一次）
@@ -193,7 +193,7 @@ return 'other';
 ## 测试
 
 ```bash
-npm test          # 三个套件，2 秒，461 条断言
+npm test          # 三个套件，2 秒，464 条断言
 node scripts/smoke-real.mjs   # 对真的 DeepSeek 打一次
 ```
 
@@ -222,6 +222,7 @@ mock 会把每个请求的 `Authorization` 头记下来，直接断言它。
 - 黑板增量动画的记账口径必须和渲染口径一致，`isNaN` 时 fallback 是 `drawn.length` **不是 0**
 - 门禁条件用「现在是否在跑」，不能用「是否有内容」
 - 中文输入法组合期回车不能提交
+- `app.js` 的模块图必须能链接起来（`node --check` 只查语法，链接失败是整页白屏）
 - 拖参数前要摘掉入场动画的类，否则每拖一下重播一次描线
 
 ---

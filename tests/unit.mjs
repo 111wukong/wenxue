@@ -761,5 +761,65 @@ const { ok, eq, near, throws } = R;
   ok('★ 前端只打同源的 /api/chat', frontend.includes("'/api/chat'"));
 }
 
+/* ============================================================
+   11. ★ 真的 import 一次 app.js，验证模块图能链接起来
+   ============================================================
+   `node --check` 只查语法。**链接**是另一回事：
+   路径写错、或者从别的模块 import 了一个不存在的导出，
+   语法完全合法，但在浏览器里的表现是**整页白屏** ——
+   而且控制台只有一句 `does not provide an export named ...`，
+   很容易被当成别的问题。
+
+   这里用最小 DOM 桩把它 import 进来，链接失败就会当场抛出来。
+   ============================================================ */
+{
+  const noop = () => {};
+  const stubEl = () => ({
+    classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
+    style: {},
+    setAttribute: noop,
+    getAttribute: () => null,          // 返回 null → 走 isNaN 兜底那条路
+    addEventListener: noop,
+    appendChild: noop,
+    remove: noop,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    after: noop,
+    innerHTML: '',
+    textContent: '',
+    value: '',
+    disabled: false,
+    placeholder: '',
+    className: '',
+    focus: noop,
+  });
+
+  const hadWindow = 'window' in globalThis;
+  const prevWindow = globalThis.window;
+  globalThis.document = {
+    readyState: 'complete',
+    querySelector: () => stubEl(),
+    querySelectorAll: () => [],
+    createElement: () => stubEl(),
+    addEventListener: noop,
+    body: stubEl(),
+  };
+  globalThis.window = { matchMedia: () => ({ matches: false }) };
+  globalThis.requestAnimationFrame = (fn) => setTimeout(() => fn(Date.now()), 0);
+  globalThis.confirm = () => false;
+
+  try {
+    await import('../public/js/app.js');
+    ok('★ app.js 的模块图能在 Node 里链接起来（import 路径与导出名都对）', true);
+    ok('★ app.js 挂出了调试出口', !!globalThis.window.__wenxue);
+    ok('★ 调试出口里带上了核心模块', !!(globalThis.window.__wenxue && globalThis.window.__wenxue.Classroom && globalThis.window.__wenxue.judge));
+  } catch (e) {
+    ok('★ app.js 的模块图能在 Node 里链接起来（import 路径与导出名都对）', false, e.message);
+  } finally {
+    if (hadWindow) globalThis.window = prevWindow; else delete globalThis.window;
+    delete globalThis.document;
+  }
+}
+
 const st = R.done();
 process.exit(st.fail ? 1 : 0);
